@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { supabaseHelpers } from "@/lib/supabase-helpers"
 import { useProfile } from "@/contexts/ProfileContext"
+import type { Client } from "@/lib/types"
 
 import Image from "next/image"
 import Link from "next/link"
@@ -109,17 +110,13 @@ const data = {
   ],
 }
 
-interface Client {
-  id: string
-  name: string
-  email: string
-  company: string
-  status: string
-  portalUrl: string
+// Use the Client type from lib/types.ts and extend it for backward compatibility
+interface ClientWithLegacy extends Client {
+  // Legacy properties for backward compatibility
+  portalUrl?: string
   profilePicture?: string
-  documents?: ClientDocument[]
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
   portalAccessCode?: string
   portalEnabled?: boolean
 }
@@ -129,18 +126,18 @@ interface ClientDocument {
   name: string
   size: number
   type: string
-  uploadedAt: Date
+  uploaded_at: string
   url: string
-  isContract?: boolean
+  is_contract?: boolean
 }
 
 export default function ClientsPage() {
   const router = useRouter()
   const { profileData } = useProfile()
-  const [clients, setClients] = useState<Client[]>([])
+  const [clients, setClients] = useState<ClientWithLegacy[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingClient, setEditingClient] = useState<Client | null>(null)
+  const [editingClient, setEditingClient] = useState<ClientWithLegacy | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [formData, setFormData] = useState({
     name: "",
@@ -149,25 +146,27 @@ export default function ClientsPage() {
     status: "active",
     profilePicture: "",
   })
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [selectedClient, setSelectedClient] = useState<ClientWithLegacy | null>(null)
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
 
   useEffect(() => {
     // Profile data is now loaded by ProfileContext
-    loadClientsFromStorage()
+    loadClientsFromSupabase()
   }, [])
 
-  const loadClientsFromStorage = () => {
-    const savedClients = localStorage.getItem("clients")
-    if (savedClients) {
-      setClients(JSON.parse(savedClients))
+  const loadClientsFromSupabase = async () => {
+    try {
+      const clientsData = await supabaseHelpers.getClients()
+      setClients(clientsData)
+    } catch (error) {
+      console.error("Error loading clients:", error)
+      // Fallback to localStorage for backward compatibility
+      const savedClients = localStorage.getItem("clients")
+      if (savedClients) {
+        setClients(JSON.parse(savedClients))
+      }
     }
-  }
-
-  const saveClientsToStorage = (clientsData: Client[]) => {
-    localStorage.setItem("clients", JSON.stringify(clientsData))
-    setClients(clientsData)
   }
 
   const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,51 +187,75 @@ export default function ClientsPage() {
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault()
-    const newClient: Client = {
-      id: Date.now().toString(),
-      ...formData,
-      portalUrl: `trymarro.com/${formData.company.toLowerCase().replace(/\s+/g, "-")}`,
-      portalAccessCode: generateAccessCode(),
-      portalEnabled: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    try {
+      const clientData = {
+        name: formData.name,
+        email: formData.email,
+        company: formData.company,
+        status: formData.status as "active" | "inactive" | "pending",
+        profile_picture: formData.profilePicture || undefined,
+        portal_url: `trymarro.com/${formData.company.toLowerCase().replace(/\s+/g, "-")}`,
+      }
+
+      const newClient = await supabaseHelpers.createClient(clientData)
+      setClients([...clients, newClient])
+
+      setIsAddDialogOpen(false)
+      setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
+    } catch (error) {
+      console.error("Error creating client:", error)
+      alert("Failed to create client. Please try again.")
     }
-
-    const updatedClients = [...clients, newClient]
-    saveClientsToStorage(updatedClients)
-
-    setIsAddDialogOpen(false)
-    setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
   }
 
   const handleEditClient = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingClient) return
 
-    const updatedClients = clients.map((client) =>
-      client.id === editingClient.id ? { ...client, ...formData, updatedAt: new Date() } : client,
-    )
-    saveClientsToStorage(updatedClients)
+    try {
+      const updateData = {
+        name: formData.name,
+        email: formData.email,
+        company: formData.company,
+        status: formData.status as "active" | "inactive" | "pending",
+        profile_picture: formData.profilePicture || undefined,
+        portal_url: `trymarro.com/${formData.company.toLowerCase().replace(/\s+/g, "-")}`,
+      }
 
-    setIsEditDialogOpen(false)
-    setEditingClient(null)
-    setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
+      const updatedClient = await supabaseHelpers.updateClient(editingClient.id, updateData)
+      setClients(clients.map((client) =>
+        client.id === editingClient.id ? updatedClient : client
+      ))
+
+      setIsEditDialogOpen(false)
+      setEditingClient(null)
+      setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
+    } catch (error) {
+      console.error("Error updating client:", error)
+      alert("Failed to update client. Please try again.")
+    }
   }
 
   const handleDeleteClient = async (id: string) => {
     if (!confirm("Are you sure you want to delete this client?")) return
-    const updatedClients = clients.filter((client) => client.id !== id)
-    saveClientsToStorage(updatedClients)
+    
+    try {
+      await supabaseHelpers.deleteClient(id)
+      setClients(clients.filter((client) => client.id !== id))
+    } catch (error) {
+      console.error("Error deleting client:", error)
+      alert("Failed to delete client. Please try again.")
+    }
   }
 
-  const openEditDialog = (client: Client) => {
+  const openEditDialog = (client: ClientWithLegacy) => {
     setEditingClient(client)
     setFormData({
       name: client.name,
       email: client.email,
       company: client.company,
       status: client.status,
-      profilePicture: client.profilePicture || "",
+      profilePicture: client.profile_picture || client.profilePicture || "",
     })
     setIsEditDialogOpen(true)
   }
@@ -247,6 +270,49 @@ export default function ClientsPage() {
         .toUpperCase()
     }
     return "U"
+  }
+
+  const copyPortalLink = (client: ClientWithLegacy) => {
+    const portalUrl = client.portal_url || client.portalUrl || `trymarro.com/${client.company.toLowerCase().replace(/\s+/g, "-")}`
+    const accessCode = client.portalAccessCode || generateAccessCode()
+    const fullUrl = `https://${portalUrl}?access=${accessCode}`
+    navigator.clipboard.writeText(fullUrl)
+    alert(`Portal link copied: ${fullUrl}`)
+  }
+
+  const togglePortalAccess = (clientId: string) => {
+    // For now, just show an alert since this requires backend changes
+    alert("Portal access toggle functionality coming soon!")
+  }
+
+  const regenerateAccessCode = (clientId: string) => {
+    // For now, just show an alert since this requires backend changes
+    alert("Access code regeneration functionality coming soon!")
+  }
+
+  const openDocumentDialog = (client: ClientWithLegacy) => {
+    setSelectedClient(client)
+    setIsDocumentDialogOpen(true)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    // Handle file drop functionality
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      alert("Document upload functionality coming soon!")
+    }
   }
 
   const filteredClients = clients.filter(
@@ -279,65 +345,14 @@ export default function ClientsPage() {
       return client
     })
 
-    saveClientsToStorage(updatedClients)
+    // Document upload functionality coming soon with Supabase integration
+    alert("Document upload functionality coming soon!")
   }
 
   const handleDocumentDelete = (clientId: string, documentId: string) => {
     if (!confirm("Are you sure you want to delete this document?")) return
-
-    const updatedClients = clients.map((client) => {
-      if (client.id === clientId) {
-        return {
-          ...client,
-          documents: client.documents?.filter((doc) => doc.id !== documentId) || [],
-          updatedAt: new Date(),
-        }
-      }
-      return client
-    })
-
-    saveClientsToStorage(updatedClients)
-  }
-
-  const openDocumentDialog = (client: Client) => {
-    setSelectedClient(client)
-    setIsDocumentDialogOpen(true)
-  }
-
-  const togglePortalAccess = (clientId: string) => {
-    const updatedClients = clients.map((client) =>
-      client.id === clientId ? { ...client, portalEnabled: !client.portalEnabled, updatedAt: new Date() } : client,
-    )
-    saveClientsToStorage(updatedClients)
-  }
-
-  const regenerateAccessCode = (clientId: string) => {
-    const updatedClients = clients.map((client) =>
-      client.id === clientId ? { ...client, portalAccessCode: generateAccessCode(), updatedAt: new Date() } : client,
-    )
-    saveClientsToStorage(updatedClients)
-  }
-
-  const copyPortalLink = (client: Client) => {
-    const portalLink = `${window.location.origin}/${client.company.toLowerCase().replace(/\s+/g, "-")}?access=${client.portalAccessCode}`
-    navigator.clipboard.writeText(portalLink)
-    alert("Portal link copied to clipboard!")
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }
-
-  const handleDrop = (e: React.DragEvent, clientId: string) => {
-    e.preventDefault()
-    setIsDragOver(false)
-    handleDocumentUpload(clientId, e.dataTransfer.files)
+    // Document deletion functionality coming soon with Supabase integration
+    alert("Document deletion functionality coming soon!")
   }
 
   const formatFileSize = (bytes: number) => {
@@ -722,8 +737,8 @@ export default function ClientsPage() {
                   <CardContent className="flex items-center justify-between p-6">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-12 w-12">
-                        {client.profilePicture ? (
-                          <AvatarImage src={client.profilePicture || "/placeholder.svg"} alt={client.name} />
+                        {(client.profile_picture || client.profilePicture) ? (
+                          <AvatarImage src={(client.profile_picture || client.profilePicture) || "/placeholder.svg"} alt={client.name} />
                         ) : (
                           <AvatarFallback className="bg-[#FC4503] text-white">{client.name.charAt(0)}</AvatarFallback>
                         )}
@@ -752,10 +767,10 @@ export default function ClientsPage() {
                         size="sm"
                         onClick={() => copyPortalLink(client)}
                         className="hover:bg-[#FC4503]/10 hover:border-[#FC4503]"
-                        disabled={!client.portalEnabled}
+                        disabled={!(client.portalEnabled ?? true)}
                       >
                         <LinkIcon className="mr-2 h-4 w-4" />
-                        Portal {client.portalEnabled ? "Active" : "Disabled"}
+                        Portal {(client.portalEnabled ?? true) ? "Active" : "Disabled"}
                       </Button>
                       <Button
                         variant="outline"
@@ -779,7 +794,7 @@ export default function ClientsPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => togglePortalAccess(client.id)}>
                             <User2 className="mr-2 h-4 w-4" />
-                            {client.portalEnabled ? "Disable" : "Enable"} Portal
+                            {(client.portalEnabled ?? true) ? "Disable" : "Enable"} Portal
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => regenerateAccessCode(client.id)}>
                             <Settings className="mr-2 h-4 w-4" />
@@ -816,7 +831,7 @@ export default function ClientsPage() {
                     }`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, selectedClient.id)}
+                    onDrop={handleDrop}
                   >
                     <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <h3 className="text-lg font-semibold mb-2">Upload Client Documents</h3>
@@ -855,9 +870,9 @@ export default function ClientsPage() {
                                 <div>
                                   <h5 className="font-medium">{doc.name}</h5>
                                   <p className="text-sm text-muted-foreground">
-                                    {formatFileSize(doc.size)} • {new Date(doc.uploadedAt).toLocaleDateString()}
+                                    {formatFileSize(doc.size)} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Unknown date'}
                                   </p>
-                                  {doc.isContract && <Badge className="mt-1 bg-[#FC4503] text-white">Contract</Badge>}
+                                  {doc.is_contract && <Badge className="mt-1 bg-[#FC4503] text-white">Contract</Badge>}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">

@@ -79,6 +79,7 @@ function ClientPortalContent() {
   const [timelines, setTimelines] = useState<any[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(true) // Always allow access, removed authentication barriers
   const [loading, setLoading] = useState(true)
+  const [imageLoaded, setImageLoaded] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -139,6 +140,17 @@ function ClientPortalContent() {
         if (foundClient) {
           setClient(foundClient)
           setIsAuthenticated(true)
+
+          // Preload client profile image if it exists
+          const profileImage = (foundClient as any).profile_picture || foundClient.profilePicture
+          if (profileImage) {
+            const img = document.createElement('img')
+            img.onload = () => setImageLoaded(true)
+            img.onerror = () => setImageLoaded(true) // Set loaded even on error to prevent hanging
+            img.src = profileImage
+          } else {
+            setImageLoaded(true) // No image to load
+          }
 
           // Load projects for this client
           const projectsResponse = await fetch(`/api/projects?client_id=${foundClient.id}`)
@@ -239,6 +251,17 @@ function ClientPortalContent() {
         if (foundClient) {
           setClient(foundClient)
           setIsAuthenticated(true)
+
+          // Preload client profile image if it exists
+          const profileImage = (foundClient as any).profile_picture || foundClient.profilePicture
+          if (profileImage) {
+            const img = document.createElement('img')
+            img.onload = () => setImageLoaded(true)
+            img.onerror = () => setImageLoaded(true) // Set loaded even on error to prevent hanging
+            img.src = profileImage
+          } else {
+            setImageLoaded(true) // No image to load
+          }
 
           if (savedProjects) {
             const allProjects: Project[] = JSON.parse(savedProjects)
@@ -354,6 +377,23 @@ function ClientPortalContent() {
                   className="shrink-0 invert sm:w-6 sm:h-6"
                 />
               </div>
+              <Avatar className="size-8 sm:size-10 flex-shrink-0">
+                {((client as any).profile_picture || client.profilePicture) && imageLoaded ? (
+                  <AvatarImage 
+                    src={(client as any).profile_picture || client.profilePicture || "/placeholder.svg"} 
+                    alt={client.name}
+                    className="object-cover transition-opacity duration-200"
+                  />
+                ) : (
+                  <AvatarFallback className="bg-[#FC4503] text-white text-sm">
+                    {!imageLoaded && ((client as any).profile_picture || client.profilePicture) ? (
+                      <div className="animate-pulse bg-gray-300 rounded-full w-full h-full" />
+                    ) : (
+                      client.name.charAt(0)
+                    )}
+                  </AvatarFallback>
+                )}
+              </Avatar>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-semibold truncate">Client Portal</h1>
                 <p className="text-xs sm:text-sm text-muted-foreground truncate">Welcome, {client.name}</p>
@@ -386,11 +426,19 @@ function ClientPortalContent() {
               <CardContent>
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">
-                    {client.profilePicture ? (
-                      <AvatarImage src={client.profilePicture || "/placeholder.svg"} alt={client.name} />
+                    {((client as any).profile_picture || client.profilePicture) && imageLoaded ? (
+                      <AvatarImage 
+                        src={(client as any).profile_picture || client.profilePicture || "/placeholder.svg"} 
+                        alt={client.name}
+                        className="object-cover transition-opacity duration-200"
+                      />
                     ) : (
                       <AvatarFallback className="bg-[#FC4503] text-white text-lg">
-                        {client.name.charAt(0)}
+                        {!imageLoaded && ((client as any).profile_picture || client.profilePicture) ? (
+                          <div className="animate-pulse bg-gray-300 rounded-full w-full h-full" />
+                        ) : (
+                          client.name.charAt(0)
+                        )}
                       </AvatarFallback>
                     )}
                   </Avatar>

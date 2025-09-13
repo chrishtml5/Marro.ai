@@ -1,21 +1,27 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { clientsDb } from "@/lib/db"
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const clients = clientsDb.getAll()
-    return NextResponse.json(clients)
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 })
-  }
-}
+    const cookieStore = cookies()
+    const supabase = createClient(cookieStore)
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const client = clientsDb.create(body)
-    return NextResponse.json(client, { status: 201 })
+    // Get all clients (for public portal access)
+    // In production, you'd want to add proper authentication/authorization
+    const { data: clients, error } = await supabase
+      .from('clients')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching clients:', error)
+      return NextResponse.json({ error: 'Failed to fetch clients' }, { status: 500 })
+    }
+
+    return NextResponse.json(clients || [])
   } catch (error) {
-    return NextResponse.json({ error: "Failed to create client" }, { status: 500 })
+    console.error('API error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

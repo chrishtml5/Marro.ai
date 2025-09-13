@@ -84,7 +84,113 @@ function ClientPortalContent() {
     loadClientData()
   }, [companySlug, accessCode])
 
-  const loadClientData = () => {
+  const loadClientData = async () => {
+    try {
+      // Try to load from Supabase first
+      await loadFromSupabase()
+    } catch (error) {
+      console.error("Error loading from Supabase:", error)
+      // Fallback to localStorage
+      loadFromLocalStorage()
+    }
+  }
+
+  const loadFromSupabase = async () => {
+    try {
+      // For now, we'll need to get all clients since we don't have user context in the portal
+      // In a production app, you'd want to implement proper portal authentication
+      const response = await fetch('/api/clients')
+      if (response.ok) {
+        const clients: Client[] = await response.json()
+        const foundClient = clients.find((c) => c.company.toLowerCase().replace(/\s+/g, "-") === companySlug)
+
+        if (foundClient) {
+          setClient(foundClient)
+          setIsAuthenticated(true)
+
+          // Load projects for this client
+          const projectsResponse = await fetch(`/api/projects?client_id=${foundClient.id}`)
+          if (projectsResponse.ok) {
+            const clientProjects: Project[] = await projectsResponse.json()
+            setProjects(clientProjects)
+            
+            // Load timelines
+            await loadTimelines(clientProjects)
+          }
+        } else {
+          setIsAuthenticated(false)
+        }
+      }
+    } catch (error) {
+      console.error("Supabase loading failed:", error)
+      throw error
+    }
+  }
+
+  const loadTimelines = async (clientProjects: Project[]) => {
+    // For now, create default timelines for projects
+    // In production, you'd load these from Supabase timelines table
+    const timelinesData = clientProjects.map(project => {
+      const startDate = new Date((project as any).start_date || project.startDate || Date.now())
+      return {
+        id: `timeline-${project.id}`,
+        projectId: project.id,
+        phases: [
+          {
+            id: `phase-1-${project.id}`,
+            name: "Discovery",
+            startDate: startDate.toISOString(),
+            endDate: new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            status: "completed",
+            tasks: [
+              { id: `task-1-1-${project.id}`, name: "Requirements gathering", completed: true, dueDate: new Date(startDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-1-2-${project.id}`, name: "Stakeholder interviews", completed: true, dueDate: new Date(startDate.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-1-3-${project.id}`, name: "Technical analysis", completed: true, dueDate: new Date(startDate.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString() }
+            ]
+          },
+          {
+            id: `phase-2-${project.id}`,
+            name: "Development",
+            startDate: new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            endDate: new Date(startDate.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+            status: project.status === "completed" ? "completed" : "in-progress",
+            tasks: [
+              { id: `task-2-1-${project.id}`, name: "Frontend development", completed: project.status === "completed", dueDate: new Date(startDate.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-2-2-${project.id}`, name: "Backend development", completed: project.status === "completed", dueDate: new Date(startDate.getTime() + 18 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-2-3-${project.id}`, name: "Integration", completed: false, dueDate: new Date(startDate.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString() }
+            ]
+          },
+          {
+            id: `phase-3-${project.id}`,
+            name: "Testing",
+            startDate: new Date(startDate.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+            endDate: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+            status: project.status === "completed" ? "completed" : "pending",
+            tasks: [
+              { id: `task-3-1-${project.id}`, name: "Unit testing", completed: false, dueDate: new Date(startDate.getTime() + 24 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-3-2-${project.id}`, name: "User acceptance testing", completed: false, dueDate: new Date(startDate.getTime() + 26 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-3-3-${project.id}`, name: "Bug fixes", completed: false, dueDate: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString() }
+            ]
+          },
+          {
+            id: `phase-4-${project.id}`,
+            name: "Launch",
+            startDate: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+            endDate: new Date(startDate.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString(),
+            status: project.status === "completed" ? "completed" : "pending",
+            tasks: [
+              { id: `task-4-1-${project.id}`, name: "Production deployment", completed: project.status === "completed", dueDate: new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() },
+              { id: `task-4-2-${project.id}`, name: "Go-live", completed: project.status === "completed", dueDate: new Date(startDate.getTime() + 32 * 24 * 60 * 1000).toISOString() },
+              { id: `task-4-3-${project.id}`, name: "Post-launch monitoring", completed: false, dueDate: new Date(startDate.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString() }
+            ]
+          }
+        ]
+      }
+    })
+    setTimelines(timelinesData)
+  }
+
+  const loadFromLocalStorage = () => {
     try {
       const savedClients = localStorage.getItem("clients")
       const savedProjects = localStorage.getItem("projects")
@@ -103,118 +209,18 @@ function ClientPortalContent() {
             const clientProjects = allProjects.filter((p) => p.clientId === foundClient.id)
             setProjects(clientProjects)
 
-            // Auto-create timelines for projects that don't have them
-            let timelinesData = savedTimelines ? JSON.parse(savedTimelines) : []
-            const projectsNeedingTimelines = clientProjects.filter(project => 
-              !timelinesData.some((timeline: any) => timeline.projectId === project.id)
-            )
-            
-            if (projectsNeedingTimelines.length > 0) {
-              const newTimelines = projectsNeedingTimelines.map(project => {
-                const startDate = new Date(project.startDate || Date.now())
-                return {
-                  id: `timeline-${project.id}`,
-                  projectId: project.id,
-                  phases: [
-                    {
-                      id: "1",
-                      name: "Discovery & Planning",
-                      startDate: startDate.toISOString().split("T")[0],
-                      endDate: new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      status: project.status === "planning" ? "in-progress" : "completed",
-                      tasks: [
-                        {
-                          id: "1",
-                          name: "Client requirements gathering",
-                          completed: project.status !== "planning",
-                          dueDate: new Date(startDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                        {
-                          id: "2",
-                          name: "Project scope definition", 
-                          completed: project.status !== "planning",
-                          dueDate: new Date(startDate.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                      ],
-                    },
-                    {
-                      id: "2",
-                      name: "Development",
-                      startDate: new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      endDate: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      status: project.status === "in-progress" ? "in-progress" : project.status === "planning" ? "pending" : "completed",
-                      tasks: [
-                        {
-                          id: "4",
-                          name: "Core development",
-                          completed: project.status === "completed",
-                          dueDate: new Date(startDate.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                        {
-                          id: "5",
-                          name: "Feature implementation",
-                          completed: project.status === "completed",
-                          dueDate: new Date(startDate.getTime() + 25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                      ],
-                    },
-                    {
-                      id: "3",
-                      name: "Testing & Review",
-                      startDate: new Date(startDate.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      endDate: new Date(startDate.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      status: project.status === "review" ? "in-progress" : project.status === "completed" ? "completed" : "pending",
-                      tasks: [
-                        {
-                          id: "7",
-                          name: "Quality assurance testing",
-                          completed: project.status === "completed",
-                          dueDate: new Date(startDate.getTime() + 32 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                        {
-                          id: "8",
-                          name: "Client review & feedback",
-                          completed: project.status === "completed",
-                          dueDate: new Date(startDate.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                      ],
-                    },
-                    {
-                      id: "4",
-                      name: "Launch & Delivery",
-                      startDate: new Date(startDate.getTime() + 35 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      endDate: new Date(startDate.getTime() + 42 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                      status: project.status === "completed" ? "completed" : "pending",
-                      tasks: [
-                        {
-                          id: "9",
-                          name: "Final deployment",
-                          completed: project.status === "completed",
-                          dueDate: new Date(startDate.getTime() + 38 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                        {
-                          id: "10",
-                          name: "Documentation & handover",
-                          completed: project.status === "completed",
-                          dueDate: new Date(startDate.getTime() + 42 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                        },
-                      ],
-                    },
-                  ],
-                }
-              })
-              
-              timelinesData = [...timelinesData, ...newTimelines]
-              localStorage.setItem("timelines", JSON.stringify(timelinesData))
-            }
-            
-            // Set timelines state
-            setTimelines(timelinesData)
+            // Load existing timelines or create default ones
+            loadTimelines(clientProjects)
+          } else {
+            setIsAuthenticated(false)
           }
         }
+      } else {
+        setIsAuthenticated(false)
       }
     } catch (error) {
       console.error("Error loading client data:", error)
+      setIsAuthenticated(false)
     } finally {
       setLoading(false)
     }

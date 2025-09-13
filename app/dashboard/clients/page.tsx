@@ -152,19 +152,50 @@ export default function ClientsPage() {
 
   useEffect(() => {
     // Profile data is now loaded by ProfileContext
+    testSupabaseConnection()
     loadClientsFromSupabase()
   }, [])
 
+  const testSupabaseConnection = async () => {
+    console.log("Testing Supabase connection...")
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log("Current user:", user)
+      
+      if (user) {
+        // Test if we can query the clients table
+        const { data, error } = await supabase
+          .from('clients')
+          .select('count')
+          .limit(1)
+        
+        if (error) {
+          console.error("Error querying clients table:", error)
+        } else {
+          console.log("Clients table accessible:", data)
+        }
+      }
+    } catch (error) {
+      console.error("Supabase connection test failed:", error)
+    }
+  }
+
   const loadClientsFromSupabase = async () => {
+    console.log("Loading clients from Supabase...")
     try {
       const clientsData = await supabaseHelpers.getClients()
+      console.log("Loaded clients from Supabase:", clientsData)
       setClients(clientsData)
     } catch (error) {
-      console.error("Error loading clients:", error)
+      console.error("Error loading clients from Supabase:", error)
       // Fallback to localStorage for backward compatibility
       const savedClients = localStorage.getItem("clients")
       if (savedClients) {
+        console.log("Falling back to localStorage clients:", JSON.parse(savedClients))
         setClients(JSON.parse(savedClients))
+      } else {
+        console.log("No clients found in localStorage either")
       }
     }
   }
@@ -187,6 +218,8 @@ export default function ClientsPage() {
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("Starting client creation...")
+    
     try {
       const clientData = {
         name: formData.name,
@@ -197,14 +230,26 @@ export default function ClientsPage() {
         portal_url: `trymarro.com/${formData.company.toLowerCase().replace(/\s+/g, "-")}`,
       }
 
+      console.log("Client data to create:", clientData)
+      
       const newClient = await supabaseHelpers.createClient(clientData)
-      setClients([...clients, newClient])
+      console.log("Client created successfully:", newClient)
+      
+      // Update state
+      const updatedClients = [...clients, newClient]
+      setClients(updatedClients)
+
+      // Also save to localStorage as backup while debugging
+      localStorage.setItem("clients", JSON.stringify(updatedClients))
+      console.log("Also saved to localStorage as backup")
 
       setIsAddDialogOpen(false)
       setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
+      
+      alert("Client created successfully!")
     } catch (error) {
       console.error("Error creating client:", error)
-      alert("Failed to create client. Please try again.")
+      alert(`Failed to create client: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

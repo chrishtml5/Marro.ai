@@ -81,19 +81,51 @@ function ClientPortalContent() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadClientData()
-  }, [companySlug, accessCode])
-
-  const loadClientData = async () => {
-    try {
-      // Try to load from Supabase first
-      await loadFromSupabase()
-    } catch (error) {
-      console.error("Error loading from Supabase:", error)
-      // Fallback to localStorage
-      loadFromLocalStorage()
+    let isMounted = true
+    let timeoutId: NodeJS.Timeout
+    
+    const loadClientData = async () => {
+      if (!isMounted) return
+      
+      try {
+        setLoading(true)
+        
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.error("Loading timeout - falling back to localStorage")
+            loadFromLocalStorage()
+          }
+        }, 10000) // 10 second timeout
+        
+        // Try to load from Supabase first
+        await loadFromSupabase()
+        
+        // Clear timeout if successful
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
+      } catch (error) {
+        console.error("Error loading from Supabase:", error)
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+        }
+        if (isMounted) {
+          // Fallback to localStorage
+          loadFromLocalStorage()
+        }
+      }
     }
-  }
+
+    loadClientData()
+    
+    return () => {
+      isMounted = false
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [companySlug]) // Removed accessCode dependency
 
   const loadFromSupabase = async () => {
     try {
@@ -117,9 +149,13 @@ function ClientPortalContent() {
             // Load timelines
             await loadTimelines(clientProjects)
           }
+          setLoading(false)
         } else {
           setIsAuthenticated(false)
+          setLoading(false)
         }
+      } else {
+        throw new Error('Failed to fetch clients')
       }
     } catch (error) {
       console.error("Supabase loading failed:", error)
@@ -211,9 +247,9 @@ function ClientPortalContent() {
 
             // Load existing timelines or create default ones
             loadTimelines(clientProjects)
-          } else {
-            setIsAuthenticated(false)
           }
+        } else {
+          setIsAuthenticated(false)
         }
       } else {
         setIsAuthenticated(false)
@@ -249,10 +285,22 @@ function ClientPortalContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FC4503] mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading your portal...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="flex justify-center mb-4">
+            <div className="flex aspect-square size-12 items-center justify-center rounded-lg bg-[#FC4503] text-white">
+              <Image
+                src="/images/marro-logo-black.png"
+                alt="Marro"
+                width={32}
+                height={32}
+                className="shrink-0 invert"
+              />
+            </div>
+          </div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FC4503] mx-auto mb-4"></div>
+          <h2 className="text-lg font-semibold mb-2">Loading your portal...</h2>
+          <p className="text-sm text-muted-foreground">Please wait while we prepare your client dashboard</p>
         </div>
       </div>
     )

@@ -442,7 +442,7 @@ function ClientPortalContent() {
                       </AvatarFallback>
                     )}
                   </Avatar>
-                  <div className="grid grid-cols-2 gap-4 flex-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                     <div>
                       <p className="text-sm text-muted-foreground">Name</p>
                       <p className="font-medium">{client.name}</p>
@@ -453,7 +453,7 @@ function ClientPortalContent() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="font-medium text-sm sm:text-base break-all">{client.email}</p>
+                      <p className="font-medium text-xs sm:text-sm break-words min-w-0">{client.email}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Status</p>

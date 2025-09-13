@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useParams, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -68,7 +68,7 @@ interface TimelineTask {
   dueDate: string
 }
 
-export default function ClientPortalPage() {
+function ClientPortalContent() {
   const params = useParams()
   const searchParams = useSearchParams()
   const companySlug = params.company as string
@@ -594,5 +594,27 @@ export default function ClientPortalPage() {
         </Tabs>
       </main>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center h-16">
+            <div className="text-muted-foreground">Loading client portal...</div>
+          </div>
+        </div>
+      </header>
+    </div>
+  )
+}
+
+export default function ClientPortalPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ClientPortalContent />
+    </Suspense>
   )
 }

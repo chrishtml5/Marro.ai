@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Calendar, FileText, Download, Eye, Clock, CheckCircle, AlertCircle, User, Building, Mail } from "lucide-react"
@@ -66,7 +66,7 @@ interface TimelineTask {
   dueDate: string
 }
 
-export default function ClientPortalPage() {
+function ClientPortalContent() {
   const searchParams = useSearchParams()
   const clientId = searchParams.get("client") || ""
 
@@ -415,5 +415,25 @@ export default function ClientPortalPage() {
         </Tabs>
       </div>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-muted-foreground">Loading client portal...</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function ClientPortalPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ClientPortalContent />
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -10,7 +10,7 @@ import { createClient } from "@/utils/supabase/client"
 import { supabaseHelpers } from "@/lib/supabase-helpers"
 import { CheckCircle, Mail, RefreshCw } from "lucide-react"
 
-export default function ConfirmEmailPage() {
+function ConfirmEmailContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [isConfirmed, setIsConfirmed] = useState(false)
   const [error, setError] = useState("")
@@ -213,5 +213,28 @@ export default function ConfirmEmailPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#FC4503] via-[#FC6B03] to-[#FCA503] flex items-center justify-center p-4">
+      <Card className="w-full max-w-md shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center space-x-2">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            <span>Loading...</span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default function ConfirmEmailPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ConfirmEmailContent />
+    </Suspense>
   )
 }

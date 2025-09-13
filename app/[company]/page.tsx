@@ -130,9 +130,7 @@ function ClientPortalContent() {
 
   const loadFromSupabase = async () => {
     try {
-      // For now, we'll need to get all clients since we don't have user context in the portal
-      // In a production app, you'd want to implement proper portal authentication
-      const response = await fetch('/api/clients')
+      const response = await fetch('/api/public/clients')
       if (response.ok) {
         const clients: Client[] = await response.json()
         const foundClient = clients.find((c) => c.company.toLowerCase().replace(/\s+/g, "-") === companySlug)
@@ -146,19 +144,17 @@ function ClientPortalContent() {
           if (profileImage) {
             const img = document.createElement('img')
             img.onload = () => setImageLoaded(true)
-            img.onerror = () => setImageLoaded(true) // Set loaded even on error to prevent hanging
+            img.onerror = () => setImageLoaded(true)
             img.src = profileImage
           } else {
-            setImageLoaded(true) // No image to load
+            setImageLoaded(true)
           }
 
           // Load projects for this client
-          const projectsResponse = await fetch(`/api/projects?client_id=${foundClient.id}`)
+          const projectsResponse = await fetch(`/api/public/projects?client_id=${foundClient.id}`)
           if (projectsResponse.ok) {
             const clientProjects: Project[] = await projectsResponse.json()
             setProjects(clientProjects)
-            
-            // Load timelines
             await loadTimelines(clientProjects)
           }
           setLoading(false)

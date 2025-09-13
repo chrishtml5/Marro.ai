@@ -129,46 +129,9 @@ function ClientPortalContent() {
   }, [companySlug]) // Removed accessCode dependency
 
   const loadFromSupabase = async () => {
-    try {
-      const response = await fetch('/api/public/clients')
-      if (response.ok) {
-        const clients: Client[] = await response.json()
-        const foundClient = clients.find((c) => c.company.toLowerCase().replace(/\s+/g, "-") === companySlug)
-
-        if (foundClient) {
-          setClient(foundClient)
-          setIsAuthenticated(true)
-
-          // Preload client profile image if it exists
-          const profileImage = (foundClient as any).profile_picture || foundClient.profilePicture
-          if (profileImage) {
-            const img = document.createElement('img')
-            img.onload = () => setImageLoaded(true)
-            img.onerror = () => setImageLoaded(true)
-            img.src = profileImage
-          } else {
-            setImageLoaded(true)
-          }
-
-          // Load projects for this client
-          const projectsResponse = await fetch(`/api/public/projects?client_id=${foundClient.id}`)
-          if (projectsResponse.ok) {
-            const clientProjects: Project[] = await projectsResponse.json()
-            setProjects(clientProjects)
-            await loadTimelines(clientProjects)
-          }
-          setLoading(false)
-        } else {
-          setIsAuthenticated(false)
-          setLoading(false)
-        }
-      } else {
-        throw new Error('Failed to fetch clients')
-      }
-    } catch (error) {
-      console.error("Supabase loading failed:", error)
-      throw error
-    }
+    // Skip Supabase API for client portal due to RLS policies
+    // Use localStorage which was working before
+    throw new Error('Using localStorage for client portal access')
   }
 
   const loadTimelines = async (clientProjects: Project[]) => {

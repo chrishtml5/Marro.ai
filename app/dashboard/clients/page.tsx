@@ -150,79 +150,22 @@ export default function ClientsPage() {
   const [selectedClient, setSelectedClient] = useState<ClientWithLegacy | null>(null)
   const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // Profile data is now loaded by ProfileContext
-    testSupabaseConnection()
-    loadClientsFromSupabase()
+    loadClients()
   }, [])
 
-  const testSupabaseConnection = async () => {
-    console.log("Testing Supabase connection...")
+  const loadClients = async () => {
+    setLoading(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      console.log("Current user:", user)
-      
-      if (user) {
-        // Test if we can query the clients table
-        const { data, error } = await supabase
-          .from('clients')
-          .select('count')
-          .limit(1)
-        
-        if (error) {
-          console.error("Error querying clients table:", error)
-        } else {
-          console.log("Clients table accessible:", data)
-        }
-      }
-    } catch (error) {
-      console.error("Supabase connection test failed:", error)
-    }
-  }
-
-  const loadClientsFromSupabase = async () => {
-    console.log("Loading clients from Supabase...")
-    try {
-      // First check if user is authenticated
-      const supabase = createClient()
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
-        console.error("User not authenticated when loading clients:", userError)
-        return
-      }
-      
-      console.log("User authenticated, loading clients for user ID:", user.id)
-      
-      // Try direct query to see what's in the database
-      const { data: rawData, error: rawError } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      
-      if (rawError) {
-        console.error("Raw query error:", rawError)
-      } else {
-        console.log("Raw query result:", rawData)
-      }
-      
-      // Now try with helper function
       const clientsData = await supabaseHelpers.getClients()
-      console.log("Helper function result:", clientsData)
       setClients(clientsData)
     } catch (error) {
-      console.error("Error loading clients from Supabase:", error)
-      // Fallback to localStorage for backward compatibility
-      const savedClients = localStorage.getItem("clients")
-      if (savedClients) {
-        console.log("Falling back to localStorage clients:", JSON.parse(savedClients))
-        setClients(JSON.parse(savedClients))
-      } else {
-        console.log("No clients found in localStorage either")
-      }
+      console.error("Failed to load clients:", error)
+      setClients([])
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -244,7 +187,7 @@ export default function ClientsPage() {
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Starting client creation...")
+    setLoading(true)
     
     try {
       const clientData = {
@@ -256,26 +199,16 @@ export default function ClientsPage() {
         portal_url: `trymarro.com/${formData.company.toLowerCase().replace(/\s+/g, "-")}`,
       }
 
-      console.log("Client data to create:", clientData)
-      
       const newClient = await supabaseHelpers.createClient(clientData)
-      console.log("Client created successfully:", newClient)
-      
-      // Update state
-      const updatedClients = [...clients, newClient]
-      setClients(updatedClients)
-
-      // Also save to localStorage as backup while debugging
-      localStorage.setItem("clients", JSON.stringify(updatedClients))
-      console.log("Also saved to localStorage as backup")
+      setClients([newClient, ...clients])
 
       setIsAddDialogOpen(false)
       setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
-      
-      alert("Client created successfully!")
     } catch (error) {
       console.error("Error creating client:", error)
       alert(`Failed to create client: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -283,6 +216,7 @@ export default function ClientsPage() {
     e.preventDefault()
     if (!editingClient) return
 
+    setLoading(true)
     try {
       const updateData = {
         name: formData.name,
@@ -303,19 +237,24 @@ export default function ClientsPage() {
       setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })
     } catch (error) {
       console.error("Error updating client:", error)
-      alert("Failed to update client. Please try again.")
+      alert(`Failed to update client: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
     }
   }
 
   const handleDeleteClient = async (id: string) => {
     if (!confirm("Are you sure you want to delete this client?")) return
     
+    setLoading(true)
     try {
       await supabaseHelpers.deleteClient(id)
       setClients(clients.filter((client) => client.id !== id))
     } catch (error) {
       console.error("Error deleting client:", error)
-      alert("Failed to delete client. Please try again.")
+      alert(`Failed to delete client: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -352,12 +291,10 @@ export default function ClientsPage() {
   }
 
   const togglePortalAccess = (clientId: string) => {
-    // For now, just show an alert since this requires backend changes
     alert("Portal access toggle functionality coming soon!")
   }
 
   const regenerateAccessCode = (clientId: string) => {
-    // For now, just show an alert since this requires backend changes
     alert("Access code regeneration functionality coming soon!")
   }
 
@@ -379,50 +316,14 @@ export default function ClientsPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-    // Handle file drop functionality
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      alert("Document upload functionality coming soon!")
-    }
-  }
-
-  const filteredClients = clients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.company.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  const handleDocumentUpload = (clientId: string, files: FileList | null) => {
-    if (!files) return
-
-    const updatedClients = clients.map((client) => {
-      if (client.id === clientId) {
-        const newDocuments = Array.from(files).map((file) => ({
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          uploadedAt: new Date(),
-          url: URL.createObjectURL(file),
-          isContract: file.type === "application/pdf" && file.name.toLowerCase().includes("contract"),
-        }))
-
-        return {
-          ...client,
-          documents: [...(client.documents || []), ...newDocuments],
-          updatedAt: new Date(),
-        }
-      }
-      return client
-    })
-
-    // Document upload functionality coming soon with Supabase integration
     alert("Document upload functionality coming soon!")
   }
 
-  const handleDocumentDelete = (clientId: string, documentId: string) => {
-    if (!confirm("Are you sure you want to delete this document?")) return
-    // Document deletion functionality coming soon with Supabase integration
+  const handleDocumentUpload = () => {
+    alert("Document upload functionality coming soon!")
+  }
+
+  const handleDocumentDelete = () => {
     alert("Document deletion functionality coming soon!")
   }
 
@@ -433,6 +334,12 @@ export default function ClientsPage() {
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
+
+  const filteredClients = clients.filter(
+    (client) =>
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.company.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   return (
     <SidebarProvider>
@@ -563,22 +470,14 @@ export default function ClientsPage() {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+        <header className="flex h-16 shrink-0 items-center gap-2">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <div className="h-4 w-px bg-sidebar-border" />
-            <h1 className="text-lg font-semibold">Clients</h1>
-          </div>
-          <div className="ml-auto flex items-center gap-2 px-4">
-            <Badge className="bg-[#FC4503] text-white hover:bg-[#FC4503]/90">Beta</Badge>
-            <Button variant="outline" size="icon">
-              <Search className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-semibold">Clients</span>
+            </div>
           </div>
         </header>
 
@@ -597,21 +496,22 @@ export default function ClientsPage() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={loadClientsFromSupabase}
+                onClick={loadClients}
+                disabled={loading}
                 className="hover:bg-[#FC4503]/10 hover:border-[#FC4503]"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
             </div>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-[#FC4503] hover:bg-[#FC4503]/90">
+                <Button className="bg-[#FC4503] hover:bg-[#FC4503]/90" disabled={loading}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Client
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>Add New Client</DialogTitle>
                 </DialogHeader>
@@ -695,102 +595,8 @@ export default function ClientsPage() {
                     <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" className="bg-[#FC4503] hover:bg-[#FC4503]/90">
-                      Add Client
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-
-            {/* Edit Client Dialog */}
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Edit Client</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleEditClient} className="space-y-4">
-                  <div>
-                    <Label htmlFor="editProfilePicture">Profile Picture</Label>
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-16 w-16">
-                        {formData.profilePicture ? (
-                          <AvatarImage src={formData.profilePicture || "/placeholder.svg"} alt="Profile" />
-                        ) : (
-                          <AvatarFallback className="bg-[#FC4503] text-white">
-                            <Upload className="h-6 w-6" />
-                          </AvatarFallback>
-                        )}
-                      </Avatar>
-                      <div>
-                        <Input
-                          id="editProfilePicture"
-                          type="file"
-                          accept="image/*"
-                          onChange={handleProfilePictureUpload}
-                          className="hidden"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => document.getElementById("editProfilePicture")?.click()}
-                        >
-                          <Upload className="mr-2 h-4 w-4" />
-                          Upload Photo
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="editName">Name</Label>
-                    <Input
-                      id="editName"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editEmail">Email</Label>
-                    <Input
-                      id="editEmail"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editCompany">Company</Label>
-                    <Input
-                      id="editCompany"
-                      value={formData.company}
-                      onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editStatus">Status</Label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => setFormData({ ...formData, status: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="bg-[#FC4503] hover:bg-[#FC4503]/90">
-                      Update Client
+                    <Button type="submit" className="bg-[#FC4503] hover:bg-[#FC4503]/90" disabled={loading}>
+                      {loading ? "Creating..." : "Add Client"}
                     </Button>
                   </div>
                 </form>
@@ -798,8 +604,107 @@ export default function ClientsPage() {
             </Dialog>
           </div>
 
+          {/* Edit Client Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Edit Client</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditClient} className="space-y-4">
+                <div>
+                  <Label htmlFor="editProfilePicture">Profile Picture</Label>
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      {formData.profilePicture ? (
+                        <AvatarImage src={formData.profilePicture || "/placeholder.svg"} alt="Profile" />
+                      ) : (
+                        <AvatarFallback className="bg-[#FC4503] text-white">
+                          <Upload className="h-6 w-6" />
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    <div>
+                      <Input
+                        id="editProfilePicture"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProfilePictureUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById("editProfilePicture")?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload Photo
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="editName">Name</Label>
+                  <Input
+                    id="editName"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editEmail">Email</Label>
+                  <Input
+                    id="editEmail"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editCompany">Company</Label>
+                  <Input
+                    id="editCompany"
+                    value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editStatus">Status</Label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value) => setFormData({ ...formData, status: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="bg-[#FC4503] hover:bg-[#FC4503]/90" disabled={loading}>
+                    {loading ? "Updating..." : "Update Client"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
           <div className="grid gap-4">
-            {clients.length === 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">Loading clients...</p>
+              </div>
+            ) : clients.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Users className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No clients yet</h3>
@@ -893,6 +798,7 @@ export default function ClientsPage() {
             )}
           </div>
 
+          {/* Document Dialog */}
           <Dialog open={isDocumentDialogOpen} onOpenChange={setIsDocumentDialogOpen}>
             <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
@@ -919,14 +825,13 @@ export default function ClientsPage() {
                     <input
                       type="file"
                       multiple
-                      accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
-                      onChange={(e) => handleDocumentUpload(selectedClient.id, e.target.files)}
                       className="hidden"
-                      id={`client-docs-${selectedClient.id}`}
+                      id="file-upload"
+                      onChange={handleDocumentUpload}
                     />
                     <Button
                       variant="outline"
-                      onClick={() => document.getElementById(`client-docs-${selectedClient.id}`)?.click()}
+                      onClick={() => document.getElementById("file-upload")?.click()}
                       className="hover:bg-[#FC4503]/10 hover:border-[#FC4503]"
                     >
                       <Upload className="mr-2 h-4 w-4" />
@@ -935,60 +840,47 @@ export default function ClientsPage() {
                   </div>
 
                   {/* Documents List */}
-                  <div>
-                    <h4 className="font-semibold mb-4">Uploaded Documents ({selectedClient.documents?.length || 0})</h4>
-
+                  <div className="space-y-4">
+                    <h4 className="text-md font-semibold">Uploaded Documents</h4>
                     {selectedClient.documents && selectedClient.documents.length > 0 ? (
                       <div className="grid gap-3">
                         {selectedClient.documents.map((doc) => (
-                          <Card key={doc.id}>
-                            <CardContent className="flex items-center justify-between p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-[#FC4503]/10">
-                                  <File className="h-5 w-5 text-[#FC4503]" />
-                                </div>
-                                <div>
-                                  <h5 className="font-medium">{doc.name}</h5>
-                                  <p className="text-sm text-muted-foreground">
-                                    {formatFileSize(doc.size)} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Unknown date'}
-                                  </p>
-                                  {doc.is_contract && <Badge className="mt-1 bg-[#FC4503] text-white">Contract</Badge>}
-                                </div>
+                          <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-[#FC4503]/10 rounded-md">
+                                <File className="h-5 w-5 text-[#FC4503]" />
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Button variant="outline" size="sm" onClick={() => window.open(doc.url, "_blank")}>
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const link = document.createElement("a")
-                                    link.href = doc.url
-                                    link.download = doc.name
-                                    link.click()
-                                  }}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDocumentDelete(selectedClient.id, doc.id)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                              <div>
+                                <h5 className="font-medium">{doc.name}</h5>
+                                <p className="text-sm text-muted-foreground">
+                                  {formatFileSize(doc.size)} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : 'Unknown date'}
+                                </p>
+                                {doc.is_contract && <Badge className="mt-1 bg-[#FC4503] text-white">Contract</Badge>}
                               </div>
-                            </CardContent>
-                          </Card>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button variant="outline" size="sm" onClick={() => window.open(doc.url, "_blank")}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => window.open(doc.url, "_blank")}>
+                                <Download className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDocumentDelete()}
+                                className="text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
                         <File className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>No documents uploaded yet</p>
-                        <p className="text-sm">Upload documents to get started</p>
                       </div>
                     )}
                   </div>

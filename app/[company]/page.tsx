@@ -453,7 +453,7 @@ function ClientPortalContent() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Email</p>
-                      <p className="font-medium">{client.email}</p>
+                      <p className="font-medium text-sm sm:text-base break-all">{client.email}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Status</p>

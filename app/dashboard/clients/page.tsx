@@ -33,6 +33,7 @@ import {
   Download,
   Eye,
   Link as LinkIcon,
+  RefreshCw,
 } from "lucide-react"
 
 import {
@@ -184,8 +185,33 @@ export default function ClientsPage() {
   const loadClientsFromSupabase = async () => {
     console.log("Loading clients from Supabase...")
     try {
+      // First check if user is authenticated
+      const supabase = createClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        console.error("User not authenticated when loading clients:", userError)
+        return
+      }
+      
+      console.log("User authenticated, loading clients for user ID:", user.id)
+      
+      // Try direct query to see what's in the database
+      const { data: rawData, error: rawError } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      
+      if (rawError) {
+        console.error("Raw query error:", rawError)
+      } else {
+        console.log("Raw query result:", rawData)
+      }
+      
+      // Now try with helper function
       const clientsData = await supabaseHelpers.getClients()
-      console.log("Loaded clients from Supabase:", clientsData)
+      console.log("Helper function result:", clientsData)
       setClients(clientsData)
     } catch (error) {
       console.error("Error loading clients from Supabase:", error)
@@ -567,6 +593,15 @@ export default function ClientsPage() {
               />
               <Button variant="outline" size="icon">
                 <Filter className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={loadClientsFromSupabase}
+                className="hover:bg-[#FC4503]/10 hover:border-[#FC4503]"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
               </Button>
             </div>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

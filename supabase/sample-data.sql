@@ -1,0 +1,137 @@
+-- Sample data for testing (run this after setting up authentication)
+-- Note: Replace 'your-user-id' with actual user ID from auth.users
+
+-- Insert sample user profile (this should match your auth.users entry)
+-- INSERT INTO public.users (id, email, name, plan, profile_picture)
+-- VALUES (
+--     'your-user-id'::uuid,
+--     'christian@marro.ai',
+--     'Christian Garcia',
+--     'agency',
+--     null
+-- );
+
+-- Insert sample clients
+-- INSERT INTO public.clients (id, user_id, name, email, company, status, portal_url)
+-- VALUES 
+--     (gen_random_uuid(), 'your-user-id'::uuid, 'John Smith', 'john@acmecorp.com', 'Acme Corp', 'active', '/acme-corp?access=client123'),
+--     (gen_random_uuid(), 'your-user-id'::uuid, 'Sarah Johnson', 'sarah@techstart.io', 'TechStart', 'active', '/techstart?access=client456'),
+--     (gen_random_uuid(), 'your-user-id'::uuid, 'Mike Wilson', 'mike@designstudio.com', 'Design Studio', 'pending', '/design-studio?access=client789');
+
+-- Insert sample projects
+-- INSERT INTO public.projects (id, user_id, client_id, client_name, name, description, status, progress, start_date, budget)
+-- SELECT 
+--     gen_random_uuid(),
+--     'your-user-id'::uuid,
+--     c.id,
+--     c.name,
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 'E-commerce Platform'
+--         WHEN c.company = 'TechStart' THEN 'Mobile App Development'
+--         ELSE 'Brand Identity Design'
+--     END,
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 'Complete e-commerce solution with payment integration'
+--         WHEN c.company = 'TechStart' THEN 'iOS and Android app for startup management'
+--         ELSE 'Complete brand identity package including logo and guidelines'
+--     END,
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 'in-progress'
+--         WHEN c.company = 'TechStart' THEN 'review'
+--         ELSE 'planning'
+--     END::project_status,
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 65
+--         WHEN c.company = 'TechStart' THEN 85
+--         ELSE 25
+--     END,
+--     CURRENT_DATE - INTERVAL '30 days',
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 15000.00
+--         WHEN c.company = 'TechStart' THEN 25000.00
+--         ELSE 8000.00
+--     END
+-- FROM public.clients c
+-- WHERE c.user_id = 'your-user-id'::uuid;
+
+-- Function to create sample timeline with phases and tasks
+-- CREATE OR REPLACE FUNCTION create_sample_timeline(p_project_id UUID, p_project_status TEXT)
+-- RETURNS VOID AS $$
+-- DECLARE
+--     timeline_id UUID;
+--     phase1_id UUID;
+--     phase2_id UUID;
+--     phase3_id UUID;
+--     phase4_id UUID;
+-- BEGIN
+--     -- Create timeline
+--     INSERT INTO public.timelines (id, project_id)
+--     VALUES (gen_random_uuid(), p_project_id)
+--     RETURNING id INTO timeline_id;
+    
+--     -- Create phases
+--     INSERT INTO public.timeline_phases (id, timeline_id, name, start_date, end_date, status, order_index)
+--     VALUES 
+--         (gen_random_uuid(), timeline_id, 'Discovery & Planning', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE - INTERVAL '23 days', 'completed', 1),
+--         (gen_random_uuid(), timeline_id, 'Development', CURRENT_DATE - INTERVAL '23 days', CURRENT_DATE + INTERVAL '7 days', 
+--          CASE WHEN p_project_status = 'in-progress' THEN 'in-progress' ELSE 'completed' END::timeline_status, 2),
+--         (gen_random_uuid(), timeline_id, 'Testing & Review', CURRENT_DATE + INTERVAL '7 days', CURRENT_DATE + INTERVAL '14 days',
+--          CASE WHEN p_project_status = 'review' THEN 'in-progress' WHEN p_project_status = 'completed' THEN 'completed' ELSE 'pending' END::timeline_status, 3),
+--         (gen_random_uuid(), timeline_id, 'Launch & Delivery', CURRENT_DATE + INTERVAL '14 days', CURRENT_DATE + INTERVAL '21 days',
+--          CASE WHEN p_project_status = 'completed' THEN 'completed' ELSE 'pending' END::timeline_status, 4)
+--     RETURNING id INTO phase1_id, phase2_id, phase3_id, phase4_id;
+    
+--     -- Create tasks for each phase
+--     INSERT INTO public.timeline_tasks (phase_id, name, completed, due_date, order_index)
+--     SELECT phase_id, task_name, completed, due_date, order_index
+--     FROM (
+--         VALUES 
+--             (phase1_id, 'Client requirements gathering', true, CURRENT_DATE - INTERVAL '27 days', 1),
+--             (phase1_id, 'Project scope definition', true, CURRENT_DATE - INTERVAL '25 days', 2),
+--             (phase2_id, 'Core development', CASE WHEN p_project_status IN ('review', 'completed') THEN true ELSE false END, CURRENT_DATE - INTERVAL '10 days', 1),
+--             (phase2_id, 'Feature implementation', CASE WHEN p_project_status IN ('review', 'completed') THEN true ELSE false END, CURRENT_DATE - INTERVAL '5 days', 2),
+--             (phase3_id, 'Quality assurance testing', CASE WHEN p_project_status = 'completed' THEN true ELSE false END, CURRENT_DATE + INTERVAL '10 days', 1),
+--             (phase3_id, 'Client review & feedback', CASE WHEN p_project_status = 'completed' THEN true ELSE false END, CURRENT_DATE + INTERVAL '14 days', 2),
+--             (phase4_id, 'Final deployment', CASE WHEN p_project_status = 'completed' THEN true ELSE false END, CURRENT_DATE + INTERVAL '17 days', 1),
+--             (phase4_id, 'Documentation & handover', CASE WHEN p_project_status = 'completed' THEN true ELSE false END, CURRENT_DATE + INTERVAL '21 days', 2)
+--     ) AS tasks(phase_id, task_name, completed, due_date, order_index);
+-- END;
+-- $$ LANGUAGE plpgsql;
+
+-- Create timelines for all projects
+-- SELECT create_sample_timeline(p.id, p.status::TEXT)
+-- FROM public.projects p
+-- WHERE p.user_id = 'your-user-id'::uuid;
+
+-- Insert sample documents
+-- INSERT INTO public.documents (user_id, client_id, project_id, name, size, type, url, is_contract)
+-- SELECT 
+--     'your-user-id'::uuid,
+--     c.id,
+--     p.id,
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 'E-commerce Requirements.pdf'
+--         WHEN c.company = 'TechStart' THEN 'App Specifications.pdf'
+--         ELSE 'Design Brief.pdf'
+--     END,
+--     CASE 
+--         WHEN c.company = 'Acme Corp' THEN 2048576
+--         WHEN c.company = 'TechStart' THEN 1536000
+--         ELSE 1024000
+--     END,
+--     'application/pdf',
+--     '/documents/sample.pdf',
+--     true
+-- FROM public.clients c
+-- JOIN public.projects p ON p.client_id = c.id
+-- WHERE c.user_id = 'your-user-id'::uuid;
+
+-- Insert sample analytics
+-- INSERT INTO public.analytics (user_id, metric, value, period, date)
+-- VALUES 
+--     ('your-user-id'::uuid, 'active_projects', 3, 'daily', CURRENT_DATE),
+--     ('your-user-id'::uuid, 'total_revenue', 48000.00, 'monthly', CURRENT_DATE),
+--     ('your-user-id'::uuid, 'client_satisfaction', 4.8, 'weekly', CURRENT_DATE),
+--     ('your-user-id'::uuid, 'project_completion_rate', 85.5, 'monthly', CURRENT_DATE);
+
+-- Note: Uncomment and modify the INSERT statements above with your actual user ID after authentication is set up

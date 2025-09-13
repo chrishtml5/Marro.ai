@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Updated color scheme to match Marro brand colors */
+    --background: 30 20% 96%; /* #F7F3F0 */
+    --foreground: 0 0% 4%; /* #0B0B0B */
+
+    --muted: 30 15% 90%;
+    --muted-foreground: 0 0% 45%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 4%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+
+    /* Primary color set to Marro orange */
+    --primary: 14 98% 51%; /* #FC4503 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 15% 90%;
+    --secondary-foreground: 0 0% 9%;
+
+    --accent: 30 15% 90%;
+    --accent-foreground: 0 0% 9%;
+
+    --border: 0 0% 89%;
+    --ring: 14 98% 51%;
+
+    --radius: 1rem; /* Set to 16px as specified */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

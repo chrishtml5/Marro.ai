@@ -214,14 +214,7 @@ export default function ClientsPage() {
       setClients(clientsData)
     } catch (error) {
       console.error("Error loading clients from Supabase:", error)
-      // Fallback to localStorage for backward compatibility
-      const savedClients = localStorage.getItem("clients")
-      if (savedClients) {
-        console.log("Falling back to localStorage clients:", JSON.parse(savedClients))
-        setClients(JSON.parse(savedClients))
-      } else {
-        console.log("No clients found in localStorage either")
-      }
+      setClients([])
     }
   }
 
@@ -264,9 +257,6 @@ export default function ClientsPage() {
       const updatedClients = [...clients, newClient]
       setClients(updatedClients)
 
-      // Also save to localStorage as backup while debugging
-      localStorage.setItem("clients", JSON.stringify(updatedClients))
-      console.log("Also saved to localStorage as backup")
 
       setIsAddDialogOpen(false)
       setFormData({ name: "", email: "", company: "", status: "active", profilePicture: "" })

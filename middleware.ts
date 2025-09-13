@@ -31,8 +31,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Protect dashboard and other authenticated routes
-    if (request.nextUrl.pathname.startsWith('/dashboard') || 
-        request.nextUrl.pathname.startsWith('/client-portal')) {
+    if (request.nextUrl.pathname.startsWith('/dashboard')) {
       
       if (!user) {
         console.log("Middleware: No user, redirecting to login")

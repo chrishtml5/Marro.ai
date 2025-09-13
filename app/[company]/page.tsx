@@ -94,12 +94,13 @@ function ClientPortalContent() {
         // Set a timeout to prevent infinite loading
         timeoutId = setTimeout(() => {
           if (isMounted) {
-            console.error("Loading timeout - falling back to localStorage")
-            loadFromLocalStorage()
+            console.error("Loading timeout - portal data unavailable")
+            setLoading(false)
+            setIsAuthenticated(false)
           }
         }, 10000) // 10 second timeout
         
-        // Try to load from Supabase first
+        // Load from Supabase with proper RLS policies
         await loadFromSupabase()
         
         // Clear timeout if successful
@@ -107,13 +108,13 @@ function ClientPortalContent() {
           clearTimeout(timeoutId)
         }
       } catch (error) {
-        console.error("Error loading from Supabase:", error)
+        console.error("Error loading portal data:", error)
         if (timeoutId) {
           clearTimeout(timeoutId)
         }
         if (isMounted) {
-          // Fallback to localStorage
-          loadFromLocalStorage()
+          setLoading(false)
+          setIsAuthenticated(false)
         }
       }
     }
@@ -129,9 +130,46 @@ function ClientPortalContent() {
   }, [companySlug]) // Removed accessCode dependency
 
   const loadFromSupabase = async () => {
-    // Skip Supabase API for client portal due to RLS policies
-    // Use localStorage which was working before
-    throw new Error('Using localStorage for client portal access')
+    try {
+      const response = await fetch('/api/portal/clients')
+      if (response.ok) {
+        const clients: Client[] = await response.json()
+        const foundClient = clients.find((c) => c.company.toLowerCase().replace(/\s+/g, "-") === companySlug)
+
+        if (foundClient) {
+          setClient(foundClient)
+          setIsAuthenticated(true)
+
+          // Preload client profile image if it exists
+          const profileImage = (foundClient as any).profile_picture || foundClient.profilePicture
+          if (profileImage) {
+            const img = document.createElement('img')
+            img.onload = () => setImageLoaded(true)
+            img.onerror = () => setImageLoaded(true)
+            img.src = profileImage
+          } else {
+            setImageLoaded(true)
+          }
+
+          // Load projects for this client
+          const projectsResponse = await fetch(`/api/portal/projects?client_id=${foundClient.id}`)
+          if (projectsResponse.ok) {
+            const clientProjects: Project[] = await projectsResponse.json()
+            setProjects(clientProjects)
+            await loadTimelines(clientProjects)
+          }
+          setLoading(false)
+        } else {
+          setIsAuthenticated(false)
+          setLoading(false)
+        }
+      } else {
+        throw new Error('Failed to fetch clients')
+      }
+    } catch (error) {
+      console.error("Portal API failed:", error)
+      throw error
+    }
   }
 
   const loadTimelines = async (clientProjects: Project[]) => {
@@ -197,52 +235,6 @@ function ClientPortalContent() {
     setTimelines(timelinesData)
   }
 
-  const loadFromLocalStorage = () => {
-    try {
-      const savedClients = localStorage.getItem("clients")
-      const savedProjects = localStorage.getItem("projects")
-      const savedTimelines = localStorage.getItem("timelines")
-
-      if (savedClients) {
-        const clients: Client[] = JSON.parse(savedClients)
-        const foundClient = clients.find((c) => c.company.toLowerCase().replace(/\s+/g, "-") === companySlug)
-
-        if (foundClient) {
-          setClient(foundClient)
-          setIsAuthenticated(true)
-
-          // Preload client profile image if it exists
-          const profileImage = (foundClient as any).profile_picture || foundClient.profilePicture
-          if (profileImage) {
-            const img = document.createElement('img')
-            img.onload = () => setImageLoaded(true)
-            img.onerror = () => setImageLoaded(true) // Set loaded even on error to prevent hanging
-            img.src = profileImage
-          } else {
-            setImageLoaded(true) // No image to load
-          }
-
-          if (savedProjects) {
-            const allProjects: Project[] = JSON.parse(savedProjects)
-            const clientProjects = allProjects.filter((p) => p.clientId === foundClient.id)
-            setProjects(clientProjects)
-
-            // Load existing timelines or create default ones
-            loadTimelines(clientProjects)
-          }
-        } else {
-          setIsAuthenticated(false)
-        }
-      } else {
-        setIsAuthenticated(false)
-      }
-    } catch (error) {
-      console.error("Error loading client data:", error)
-      setIsAuthenticated(false)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes"
